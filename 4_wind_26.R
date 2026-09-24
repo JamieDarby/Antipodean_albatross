@@ -1,5 +1,5 @@
 
-# Load in wind data
+# Load in wind data !!NOT PRESENT IN CURRENT UPLOAD, ALREADY IN TRIP DATA
 wind_u <- stack("e:/env_data/Copernicus/Antips/wind_20260101_20260228.nc",
                 varname = "u10")
 wind_v <- stack("e:/env_data/Copernicus/Antips/wind_20260101_20260228.nc",
