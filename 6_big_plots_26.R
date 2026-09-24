@@ -1,4 +1,37 @@
 
+embc_immerse_plot <- 
+  ggplot(trip_df %>%
+           filter(embc_simple != 5) %>%
+         # mutate(state = ifelse(embc_simple == 4, 2, embc_simple),
+                # state = factor(state, labels = c("LL", "LH & HH", "HL")))) +
+  mutate(state = factor(embc_simple, levels = c(1, 2, 4, 3),
+                        labels = c("Rest", "Intensive search",
+                                   "Extensive search", "Transit"))) %>%
+  mutate(daynight = ifelse(sun_angle < -6, "night", "day"))) +
+  geom_violin(aes(x = state, y = act, fill = state), scale = "area", bounds = c(0, 1)) +
+  scale_fill_discrete(palette = c("#1b015e", "#018c81", "#68f2a2", "#018c81"),
+                      guide = "none") +
+  labs(y = "Proportion of time wet", x = "EMbC state", title = "B") +
+  theme_classic()
+
+sex_lat_plot <- 
+  ggplot(trip_df_int %>% mutate(Sex = factor(sex, labels = c("Female", "Male")),
+                              weight = 1/6)) + 
+  geom_histogram(aes(y = Latitude, fill = Sex, weight = weight),
+                 alpha = 0.6, colour = "black",
+                 position = "stack") +
+  labs(x = "Tracked hours", title = "A") +
+  scale_fill_viridis_d(option = "H", begin = 0.1, end = 0.9) +
+  scale_x_continuous(expand = F) +
+  theme_classic()
+
+fig_1 <- 
+  plot_grid(sex_lat_plot + border, embc_immerse_plot + border, ncol = 1)
+
+ggsave(fig_1, filename = "plots/fig_1.png",
+       width = 8, height = 8, dpi = 500)
+
+
 require(marmap)
 bathy_rstr <- getNOAA.bathy(lon1 = 140, lat1 = -80,
                             lon2 = -90, lat2 = -25,
@@ -44,67 +77,6 @@ ggsave(albie_track_plot, filename = "plots/albie_track_plotb.png",
 p_ars_moon <- 
   effect_plot(mod, moon_frac, data = night_df, interval = T,
               plot.points = F, partial.residuals = F) +
-  labs(y = "P(ARS)", x = "Moon fraction", title = "B") +
-  scale_y_continuous(limits = c(0.09,0.43))
-
-p_ars_wind <- 
-  effect_plot(mod, wind_sp, data = night_df, interval = T) +
-  labs(y = "P(ARS)", x = "Wind speed (m/s)", title = "C") +
-  scale_y_continuous(limits = c(0.09,0.43))
-
-p_ars_lat <- 
-  effect_plot(mod, Latitude, data = night_df, interval = T) +
-  scale_x_continuous(limits = c(-60, -33)) +
-  labs(y = "P(ARS)", x = "Latitude", title = "D") +
-  scale_y_continuous(limits = c(0.09,0.43))
-
-p_ars_effects <- plot_grid(p_ars_moon,
-                           p_ars_wind + labs(y = ""),
-                           p_ars_lat + labs(y = ""),
-                           nrow = 1, rel_widths = c(1.05, 1, 1))
-
-big_track_plot <-
-  plot_grid(plot_grid(albie_track_plot + labs(title = "A") +
-                        theme(legend.position = c(0.9, 0.8),
-                              plot.background =
-                                element_rect(colour = "black",
-                                             fill="white",
-                                             linewidth=1)),
-                      p_ars_effects +
-                        theme(panel.border =
-                                element_rect(colour = "black",
-                                             fill=NA,
-                                             linewidth=1)),
-                      nrow = 2,
-                      rel_heights = c(2,1)),
-            plot_grid(count_plot + labs(title = "E") +
-                        theme(legend.position = "none"),
-                      gls_plot + labs(title = "F",
-                                      y = "Proportion of points"),
-                      embc_plot + labs(title = "G", 
-                                       y = "Proportion of points",
-                                       fill = "Movement mode"),
-                      nrow = 3, rel_heights = c(1.5, 1, 1)) +
-              theme(panel.border =
-                      element_rect(colour = "black",
-                                   fill=NA,
-                                   linewidth=1)),
-            nrow = 1, rel_widths = c(2.2, 1))
-
-ggsave(big_track_plot, filename = "plots/big_track_plot.png",
-       dpi = 500, width = 12, height = 8)
-
-
-border <- 
-  theme(panel.background =
-          element_rect(colour = "black",
-                       fill=NA,
-                       linewidth=1))
-
-
-p_ars_moon <- 
-  effect_plot(mod, moon_frac, data = night_df, interval = T,
-              plot.points = F, partial.residuals = F) +
   labs(y = "P(ARS)", x = "Moon fraction", title = "E") +
   scale_y_continuous(limits = c(0.09,0.47))
 
@@ -118,43 +90,6 @@ p_ars_lat <-
   scale_x_continuous(limits = c(-60, -33)) +
   labs(y = "P(ARS)", x = "Latitude", title = "G") +
   scale_y_continuous(limits = c(0.09,0.47))
-
-p_ars_effects <- plot_grid(p_ars_moon,
-                           p_ars_wind + labs(y = ""),
-                           p_ars_lat + labs(y = ""),
-                           nrow = 1, rel_widths = c(1.05, 1, 1))
-
-
-big_track_plot_b <-
-  plot_grid(plot_grid(albie_track_plot + labs(title = "A") +
-                        theme(#legend.position = c(0.9, 0.8),
-                              legend.position = "bottom"),
-                      plot_grid(count_plotb + labs(title = "B") +
-                                  theme(legend.position = "bottom"),
-                                gls_plot + labs(title = "C",
-                                                y = "Proportion of points"),
-                                embc_plot + labs(title = "D", 
-                                                 y = "Proportion of points",
-                                                 fill = "Movement mode"),
-                                nrow = 3, rel_heights = c(1, 1, 1)) + border,
-                      nrow = 1,
-                      rel_widths = c(2,1.1)),
-            plot_grid(p_ars_effects + border,
-                      prop_cars +
-                        labs(title = "H") +
-                        border,
-                      rel_widths = c(2,1.1)),
-            nrow = 2, rel_heights = c(2, 1))
-
-ggsave(big_track_plot_b, filename = "plots/big_track_plot_b2.png",
-       dpi = 500, width = 13, height = 10)
-
-supp_plot_1 <- 
-  plot_grid(sex_lat_plot + border, embc_immerse_plot + border, ncol = 1)
-
-ggsave(supp_plot_1, filename = "plots/supp_plot_1b.png",
-       width = 8, height = 8, dpi = 500)
-
 
 border <- 
   theme(panel.background =
