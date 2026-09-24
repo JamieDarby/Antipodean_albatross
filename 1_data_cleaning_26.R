@@ -2,101 +2,8 @@
 # Load in required packages
 require(tidyverse)
 require(raster)
-require(marmap)
 
-# Load in dfs if already made
-load(file = "data/cleaned/2026/trip_df_int.RData")
-load(file = "data/cleaned/2026/trip_df.RData")
-
-# Axytrek input -----------------------------------------------------------
-
-# List of Axy files
-filename <-
-  c("W638/CRAIG8_S1.csv",
-    "G227/WWF2_S1.csv",
-    "W95F/MIKE11_S1.csv",
-    "W704/WWF1_S1.csv",
-    "B09F/WWF5_S1.csv",
-    "W64D/MARY7_S1.csv",
-    "W97F/WWF2_S1.csv",
-    "W870/RAD6_S1.csv")
-
-# Create an empty list to fill with TDR files
-gps_ls <- list()
-tdr_ls <- list()
-radar_ls <- list()
-
-# Make a lil function to extract GPS and TDR data only from AxyTrek data
-for(i in 1:length(filename)){# Reads in CSV
-  acc <- read.csv(paste("c:/Users/Admin/Desktop/Tracking_data/Albie_2026/",
-                        filename[i], sep = ""),
-                  sep = "\t", header = F, skip = 1)
-  # Asigns corrects columns to data
-  colnames(acc) <- c("TagID",	"Date",	"Time",
-                     "X", "Y", "Z", "Activity",
-                     "Pressure", "Temp", "Latitude",
-                     "Longitude", "Altitude", "Speed",
-                     "Satellites", "hdop", "Signal", "Radar",
-                     "Battery",	"Metadata")
-  
-  acc$id <- sub("/.*", "", filename[i])
-  # Extract depth and location data
-  tdr_ls[[i]] <- acc[which(!is.na(acc$Pressure)), ]
-  gps_ls[[i]] <- acc[which(!is.na(acc$Latitude)), ]
-  radar_ls[[i]] <- acc[which(!is.na(acc$Radar)), ]
-}
-
-# Bind to dataframe
-axy_tdr <- bind_rows(tdr_ls) %>% mutate(date_time = ymd_hms(paste(Date, Time)))
-axy_gps <- bind_rows(gps_ls) %>%
-  mutate(date_time = ymd_hms(paste(Date, Time)),
-         Longitude_cont = ifelse(Longitude < 0, Longitude + 360, Longitude))
-axy_radar <- bind_rows(radar_ls) %>% mutate(date_time = ymd_hms(paste(Date, Time)))
-
-# Plot depth
-ggplot(axy_tdr) +
-  geom_line(aes(x = date_time, y = -(Pressure), colour = Pressure)) +
-  facet_wrap(facets = ~id)
-
-# Write out GPS and TDR data
-save(axy_tdr, file = "data/cleaned/2026/axy_tdr.RData")
-save(axy_gps, file = "data/cleaned/2026/axy_gps.RData")
-save(axy_radar, file = "data/cleaned/2026/axy_radar.RData")
-
-# IGot-U data input -------------------------------------------------------
-
-# List of filenames and where to find data
-filename <- c("W18H/GS119.csv",
-              "B905/GS103.csv",
-              "B25G/GS131.csv")
-
-# Loop through filenames and extract data
-gps_ls <- list()
-
-for(i in 1:length(filename)){
-  gps_ls[[i]] <- 
-    read.csv(paste("c:/Users/Admin/Desktop/Tracking_data/Albie_2026/",
-                   filename[i], sep = ""))
-  
-  gps_ls[[i]]$id <- sub("/.*", "", filename[i])
-}
-
-# Bind together igotu dataframes
-igotu_gps <- gps_ls %>%
-  lapply(., function(x){
-    x$date_time = ymd_hms(x$Time)
-    x <- x[order(x$date_time), ]
-    x <- x[!duplicated(x$date_time), ]
-    x}) %>%
-  bind_rows() %>%
-  mutate(Longitude_cont = ifelse(Longitude < 0, Longitude + 360, Longitude))
-
-# Write out a RData file
-save(igotu_gps, file = "data/cleaned/2026/igotu_gps.RData")
-
-# Combine all the tracking data -------------------------------------------
-
-# Load in tracks again
+# Load in tracks
 load(file = "data/cleaned/2026/axy_gps.RData")
 load(file = "data/cleaned/2026/igotu_gps.RData")
 
@@ -223,10 +130,9 @@ trip_df_int$sex <- ifelse(trip_df_int$id %in% males, "m", "f")
 save(trip_df_int, file = "data/cleaned/2026/trip_df_int.RData")
 save(trip_df, file = "data/cleaned/2026/trip_df.RData")
 
-# Plot out TDR and radar data ---------------------------------------------
+# Plot out radar data ---------------------------------------------
 
 load(file = "data/cleaned/2026/axy_radar.RData")
-load(file = "data/cleaned/2026/axy_tdr.RData")
 
 # Plot radar
 axy_radar %>%# filter(id == "W704") %>%
@@ -234,12 +140,4 @@ axy_radar %>%# filter(id == "W704") %>%
   geom_path(aes(x = date_time, y = Radar,
                 colour = Radar, group = id)) + labs(x = "Date") +
   scale_colour_viridis_c(option = "H", end = 1, guide = "none") +
-  facet_wrap(facets = ~id) 
-
-# Plot depth
-axy_tdr %>%
-  ggplot() +
-  geom_path(aes(x = date_time, y = Pressure,
-                colour = Pressure, group = id)) +
-  scale_colour_viridis_c(option = "G", end = 0.5, guide = "none") +
   facet_wrap(facets = ~id) 
