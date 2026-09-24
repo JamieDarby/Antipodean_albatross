@@ -1,5 +1,4 @@
 
-
 require(TwGeos)
 
 filename <- c("B09F/CX078_06Feb26_054012driftadj",
@@ -71,9 +70,6 @@ for(i in 1:length(filename)){
   lt_act_ls[[i]] <- x
 }
 
-ggplot(lt_lig_ls[[3]]) + geom_line(aes(x = date_time, y = log(ifelse(light > 10, 10, light))))
-ggplot(lt_act_ls[[2]]) + geom_step(aes(x = date_time, y = as.numeric(act == "dry")))
-
 act_ls <- c(mt_act_ls, lt_act_ls)
 lig_ls <- c(mt_lig_ls, lt_lig_ls)
 
@@ -83,21 +79,12 @@ save(act_ls, file = "data/cleaned/2026/act_ls")
 
 load("data/cleaned/act_ls.RData")
 
-
-ggplot(bind_rows(act_ls[1:3])) + 
-  geom_step(aes(x = date_time, y = ifelse(act == "dry", 0, 1))) +
-  facet_wrap(facets = ~id, nrow = 4)
-
-
 act_df <- bind_rows(act_ls)
-
 
 act_df$start_time <- act_df$date_time - act_df$duration
 
-
 load("data/cleaned/2026/trip_df.RData")
 load("data/cleaned/2026/trip_df_int.RData")
-
 
 # Split df into list for appending act data
 trip_df <- split(trip_df, trip_df$id) %>%
@@ -217,16 +204,6 @@ trip_df_int$fully_dry <- (!trip_df_int$fully_wet &
                             trip_df_int$takeoffs == 0)
 
 
-
-ggplot(trip_df %>% filter(!is.na(landings))) +
-  geom_bar(aes(x = (round((sun_angle*2), -1)/2),
-               weight = landings,
-               fill = id), colour = "black", stat = "count") +
-  scale_fill_viridis_d(option = "H") +
-  jtools::theme_nice() +
-  labs(x = "Solar angle", y = "Landings", fill = "Bird ID")
-
-
 act_df_dense <- split(act_df, act_df$id) %>%
   lapply(., function(x){
     out <- data.frame(date_time = seq(from = (x$date_time[1] - x$duration[1]),
@@ -308,34 +285,11 @@ plot(trip_df_int$act)
 trip_df_int$act_class <- ifelse(trip_df_int$act <= 0.05, "dry",
                                 ifelse(trip_df_int$act >= 0.95, "wet", "mixed"))
 
-
-ggplot(trip_df, aes(x = date_time, y = speed, colour = act)) +
-  geom_path() + scale_colour_viridis_c(option = "H", trans = "reverse") +
-  facet_wrap(facets = ~id)
-
-table(trip_df$act_class)
-
 save(trip_df, file = "data/cleaned/2026/trip_df.RData")
 save(trip_df_int, file = "data/cleaned/2026/trip_df_int.RData")
 
 
-
-
 load("data/cleaned/2026/lig_ls")
-
-ggplot(lig_ls %>% bind_rows() %>% mutate(light = ifelse(light > 20, 20, light))) +
-  geom_line(aes(x = date_time, y = log(light))) + facet_wrap(facets = ~id)
-
-
-ggplot(trip_df %>% filter(id == "W18H")) +
-  geom_path(aes(x = Longitude_cont, y = Latitude))
-
-trip_df %>% group_by(embc_simple) %>%
-  filter(embc_simple != 5) %>%
-  summarise(landings = mean((landings / (time / 3600)), na.rm = T)) %>%
-  ggplot() + geom_bar(aes(x = embc_simple, weight = landings))
-
-
 
 for(i in 1:length(lig_ls)){
   locations <- trip_df_int %>% filter(id == lig_ls[[i]]$id[1])
@@ -354,7 +308,6 @@ for(i in 1:length(lig_ls)){
 
 lig_df <- bind_rows(lig_ls) %>% filter(!is.na(lat)) %>%
   mutate(solar = sunAngle(t = date_time, longitude = lon, latitude = lat)$altitude)
-
 
 ggplot(lig_df %>% mutate(light = ifelse(light > 20, 20, light)) %>% 
          filter(solar < -6)) +
