@@ -335,7 +335,7 @@ speeds <- function(df){
 
 # Land shapes -------------------------------------------------------------
 
-load("data/env_rasters/land_df_wgs.RData")              
+load("land_df_wgs.RData")              
 
 # Centre the polygon longitude around 180
 land_df_cont <- land_df_wgs %>%
