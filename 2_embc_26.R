@@ -1,6 +1,7 @@
 
 # Load in package
 require(EMbC)
+require(caret)
 
 # Create object using embc of locations, times, and solar angle
 embc_obj <- trip_df %>% select(date_time, Longitude, Latitude, sun_angle) |>
