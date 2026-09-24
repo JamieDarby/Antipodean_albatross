@@ -1,94 +1,23 @@
 
-require(TwGeos)
-
-filename <- c("B09F/CX078_06Feb26_054012driftadj",
-              "B25G/P068_11Feb26_032227driftadj",
-              "G227/CX069_20Jan26_055054driftadj",
-              "W638/P067_09Feb26_043900driftadj",
-              "W64D/P078_03Feb26_062949driftadj",
-              "W704/CX073_06Jun26_155003",
-              "W870/CX073_17Jan26_084732driftadj",
-              "W97F/CX069_09Feb26_044023driftadj")
-
-mt_lig_ls <- list()
-mt_act_ls <- list()
-
-for(i in 1:length(filename)){
-  
-  mt_lig_ls[[i]] <-
-    readMTlux(file = paste("c:/Users/Admin/Desktop/Tracking_data/Albie_2026/",
-                           filename[i], ".lux",
-                           sep = "")) %>%
-    mutate(id = sub("/.*", "", filename[i]),
-           logger = "mt") %>%
-    rename(date_time = Date, light = Light)
-  
-  mt_act_ls[[i]] <-
-    read.delim(file = paste("c:/Users/Admin/Desktop/Tracking_data/Albie_2026/",
-                            filename[i], ".deg",
-                            sep = ""),
-               skip = 19, sep = "\t") %>%
-    mutate(date_time = dmy_hms(DD.MM.YYYY.HH.MM.SS),
-           id = sub("/.*", "", filename[i]),
-           logger = "mt") %>%
-    rename(act = wet.dry) %>%
-    dplyr::select(-DD.MM.YYYY.HH.MM.SS)
-}
-
-filename <- c("B905/A2080_000",
-              "W18H/A2055_000",
-              "W95F/A2806_000")
-
-lt_lig_ls <- list()
-lt_act_ls <- list()
-
-for(i in 1:length(filename)){
-  
-  lt_lig_ls[[i]] <-
-    readLig(file = paste("c:/Users/Admin/Desktop/Tracking_data/Albie_2026/",
-                         filename[i], ".lig",
-                         sep = "")) %>%
-    mutate(id = sub("/.*", "", filename[i]),
-           logger = "lt") %>%
-    rename(date_time = Date, light = Light) %>%
-    filter(Valid == "ok") %>%
-    dplyr::select(-Valid)
-  
-  x <-
-    readAct2(file = paste("c:/Users/Admin/Desktop/Tracking_data/Albie_2026/",
-                          filename[i], ".act",
-                          sep = "")) %>%
-    mutate(date_time = lead(Date),
-           id = sub("/.*", "", filename[i]),
-           logger = "lt") %>%
-    rename(act = Wet, duration = Activity) %>%
-    filter(Valid == "ok") %>%
-    dplyr::select(duration, act, date_time, id, logger)
-  
-  x$date_time[nrow(x)] <- x$date_time[(nrow(x) - 1)] + x$duration[nrow(x)]
-  
-  lt_act_ls[[i]] <- x
-}
-
-act_ls <- c(mt_act_ls, lt_act_ls)
-lig_ls <- c(mt_lig_ls, lt_lig_ls)
-
-save(lig_ls, file = "data/cleaned/2026/lig_ls")
-save(act_ls, file = "data/cleaned/2026/act_ls")
-
-
+# Load in activity data
 load("data/cleaned/act_ls.RData")
 
+# Turn it into a dataframe
 act_df <- bind_rows(act_ls)
 
+# Define a start time per immersion bout
 act_df$start_time <- act_df$date_time - act_df$duration
 
+# Load in trip data if not already loaded
 load("data/cleaned/2026/trip_df.RData")
 load("data/cleaned/2026/trip_df_int.RData")
 
+# These next two operations append number of landings, takeoffs, a combination (activity),
+# whether the device was fully wet to each trip dataframe
+
 # Split df into list for appending act data
 trip_df <- split(trip_df, trip_df$id) %>%
-  # Loop around and append number of associated landings and ingestions
+  # Loop around and append number of associated landings
   lapply(., function(x){
     # Subset act data to only the relevant id
     act <- act_df[which(act_df$id == x$id[1]), ]
@@ -139,11 +68,6 @@ trip_df <- split(trip_df, trip_df$id) %>%
     }
     x
   }) %>% bind_rows()
-
-trip_df$fully_dry <- (!trip_df$fully_wet &
-                        trip_df$landings == 0 &
-                        trip_df$takeoffs == 0)
-
 
 # Appending act data to interpolated data
 trip_df_int <- split(trip_df_int, trip_df_int$id) %>%
@@ -199,11 +123,8 @@ trip_df_int <- split(trip_df_int, trip_df_int$id) %>%
     x
   }) %>% bind_rows()
 
-trip_df_int$fully_dry <- (!trip_df_int$fully_wet &
-                            trip_df_int$landings == 0 &
-                            trip_df_int$takeoffs == 0)
-
-
+# Create continuous activity data to calculate proportion
+# of each inter-location period spent wet/dry
 act_df_dense <- split(act_df, act_df$id) %>%
   lapply(., function(x){
     out <- data.frame(date_time = seq(from = (x$date_time[1] - x$duration[1]),
@@ -220,8 +141,10 @@ act_df_dense <- split(act_df, act_df$id) %>%
     out
   }) %>% bind_rows()
 
+# Placeholder
 trip_df$act <- NA
 
+# Calculate time spent wet per location interval
 for(i in unique(act_df_dense$id)){
   
   df <- trip_df %>%
@@ -247,13 +170,15 @@ for(i in unique(act_df_dense$id)){
   print(i)
 }
 
+# Define activity class based on proportion wet/dry
 trip_df$act_class <- ifelse(trip_df$act <= 0.05, "dry",
                             ifelse(trip_df$act >= 0.95, "wet", "mixed"))
 
 
-
+# Placeholder for interpolated data
 trip_df_int$act <- NA
 
+# Append immersion to interpolated locations
 for(i in unique(act_df_dense$id)){
   
   df <- trip_df_int %>%
@@ -279,18 +204,18 @@ for(i in unique(act_df_dense$id)){
   print(i)
 }
 
-mean(trip_df_int$act, na.rm = T)
-plot(trip_df_int$act)
-
+# Activity class for interpolated data
 trip_df_int$act_class <- ifelse(trip_df_int$act <= 0.05, "dry",
                                 ifelse(trip_df_int$act >= 0.95, "wet", "mixed"))
 
+# Save these off once data are interpolated
 save(trip_df, file = "data/cleaned/2026/trip_df.RData")
 save(trip_df_int, file = "data/cleaned/2026/trip_df_int.RData")
 
-
+# Load in light data
 load("data/cleaned/2026/lig_ls")
 
+# Loop through and pull out a location for each light data
 for(i in 1:length(lig_ls)){
   locations <- trip_df_int %>% filter(id == lig_ls[[i]]$id[1])
   lig_ls[[i]]$lat <- NA
@@ -306,9 +231,12 @@ for(i in 1:length(lig_ls)){
   }
 }
 
+# Format light data into a dataframe
 lig_df <- bind_rows(lig_ls) %>% filter(!is.na(lat)) %>%
   mutate(solar = sunAngle(t = date_time, longitude = lon, latitude = lat)$altitude)
 
+# Look for any light spikes at night to pick up any vessel interactions not
+# captured in the radar dataset
 ggplot(lig_df %>% mutate(light = ifelse(light > 20, 20, light)) %>% 
          filter(solar < -6)) +
   geom_path(aes(x = light, y = solar))
