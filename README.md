@@ -1,6 +1,6 @@
 Contents
 
-cleaned.zip - Contains all data required to run the analyses for this work. Included are:
+cleaned.zip - Contains all data required to run the analyses for this work. In the code, this folder is pointed to in a "data/" path. Included are:
 
   Collated but otherwise unprocessed data from both GPS devices used in this study;
   
