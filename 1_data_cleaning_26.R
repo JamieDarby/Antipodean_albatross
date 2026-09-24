@@ -94,63 +94,6 @@ igotu_gps <- gps_ls %>%
 # Write out a RData file
 save(igotu_gps, file = "data/cleaned/2026/igotu_gps.RData")
 
-# Tidying and visualisation -----------------------------------------------
-
-# Build a bathy object
-bathy_rstr <- getNOAA.bathy(lon1 = -180, lat1 = -75,
-                            lon2 = 180, lat2 = -30,
-                            resolution = 6)
-
-# Convert to a dataframe
-bathy_raster_df <-
-  as.data.frame(rasterToPoints(as.raster(bathy_rstr / 1000))) %>%
-  filter(x < 180)
-
-# Land values to NA
-bathy_raster_df$layer[which(bathy_raster_df$layer >= 0)] <- NA
-
-# Center longitude around 180
-bathy_raster_df <- bathy_raster_df %>%
-  mutate(x_centred = ifelse(x < 0, x + 360, x))
-
-# Create cropped dataframe for faster plotting
-bathy_raster_df_res <- bathy_raster_df %>%
-  filter(x_centred > 160, x_centred < 270, y > -75, y < -30)
-
-# Plot out some tracks
-track_plot <-
-  ggplot() +
-  theme(panel.background = element_rect(fill = "#454545")) +
-  coord_cartesian(xlim = c(165, 250), ylim = c(-65, -33)) +
-  scale_colour_viridis_d(option = "H", begin = 0.5, end = 0.8, 
-                         guide = "none") +
-  scale_fill_viridis_c(option = "D", trans = "sqrt", begin = 0.7, end = 0,
-                       guide = "none") +
-  geom_tile(data = bathy_raster_df_res,
-               aes(x = x_centred, y = y, fill = abs(layer)),
-               na.rm = T, alpha = 0.9) + 
-  geom_contour(data = bathy_raster_df_res,
-               aes(x = x_centred, y = y, z = abs(layer)),
-               na.rm = T, alpha = 0.4, linewidth = 0.5, colour = "#282828") +
-  scale_x_continuous(breaks = c(180, 180.2, 200, 220, 240),
-                     labels = c("±180", "", -160, -140, -120)) +
-  scale_y_continuous(breaks = c(-65 ,-55, -45, -35)) +
-  geom_polygon(data = land_df_cut, aes(x = long, y = lat, group = group),
-               fill  = "#353535", colour = "black") +
-  geom_path(data = axy_gps,
-            aes(x = Longitude_cont, y = Latitude, colour = id),
-            linewidth = 1, alpha = 0.7) +
-  geom_path(data = igotu_gps,
-            aes(x = Longitude_cont, y = Latitude, colour = id),
-            linewidth = 1, alpha = 0.7) +
-  labs(x = "Longtiude", y = "Latitude")
-
-# track_plot
-
-# Save off the plot
-ggsave(track_plot, filename = "plots/track_plotb.png",
-       width = 16, height = 8, dpi = 500)
-
 # Combine all the tracking data -------------------------------------------
 
 # Load in tracks again
@@ -275,17 +218,6 @@ trip_df_int$col_dist <-
 males <- c("W870", "W638", "W18H", "B905")
 trip_df$sex <- ifelse(trip_df$id %in% males, "m", "f")
 trip_df_int$sex <- ifelse(trip_df_int$id %in% males, "m", "f")
-
-sex_lat_plot <- 
-  ggplot(trip_df_int %>% mutate(Sex = factor(sex, labels = c("Female", "Male")),
-                              weight = 1/6)) + 
-  geom_histogram(aes(y = Latitude, fill = Sex, weight = weight),
-                 alpha = 0.6, colour = "black",
-                 position = "stack") +
-  labs(x = "Tracked hours", title = "A") +
-  scale_fill_viridis_d(option = "H", begin = 0.1, end = 0.9) +
-  scale_x_continuous(expand = F) +
-  theme_classic()
 
 # Write some RData files
 save(trip_df_int, file = "data/cleaned/2026/trip_df_int.RData")
