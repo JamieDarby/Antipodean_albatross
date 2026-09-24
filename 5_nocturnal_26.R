@@ -1,4 +1,5 @@
 
+# Load in packages required for modelling
 require(mgcv)
 require(MuMIn)
 require(itsadug)
@@ -7,6 +8,11 @@ require(interactions)
 require(cowplot)
 require(ROCR)
 
+# Load in dfs if already made
+load(file = "data/cleaned/2026/trip_df_int.RData")
+load(file = "data/cleaned/2026/trip_df.RData")
+
+# Subset trip dataframe to night time only
 night_df <- trip_df %>% filter(sun_angle < -6) %>%
   mutate(ars = ifelse(embc %in% c(2,4,6,8), 1, 0),
          id = as.factor(id),
@@ -15,6 +21,7 @@ night_df <- trip_df %>% filter(sun_angle < -6) %>%
          ar_start = ifelse(is.na(ar_start), F, ar_start),
          sex = as.factor(sex))
 
+# Global model, ARS (presence/absence) ~ environment
 mod <- bam(data = night_df,
            formula = ars ~ 
              s(moon_frac, bs = "ts") +
@@ -29,10 +36,12 @@ mod <- bam(data = night_df,
            rho = 0.5, discrete = T, method = "fREML",
            na.action = "na.fail")
 
+# Test and select model
 summary(mod)
 acf(residuals(mod))
 MuMIn::dredge(mod)
 
+# Model with updated AR(1) specs and covariates
 mod <- bam(data = night_df,
             formula = ars ~ 
               s(moon_frac, bs = "ts") +
@@ -46,12 +55,20 @@ mod <- bam(data = night_df,
             rho = 0.4, discrete = T, method = "fREML",
             na.action = "na.fail")
 
-
+# Summarise, test, and diagnose residuals
 summary(mod)
-acf(residuals(mod))
 acf_resid(mod)
+concurvity(mod)
 testResiduals(simulateResiduals(mod))
 
+# Calculate and visualise AUC
+pr <- as.numeric(predict.gam(mod, night_df, type="response"))            
+pred <- prediction(pr, night_df$ars)
+perf <- performance(pred, measure="tpr", x.measure="fpr")  
+plot(perf, colorize = TRUE, print.cutoffs.at = c(0.1,0.2,0.3,0.4,0.5))
+perf <- performance(pred, measure="auc")  
+
+# Plot out marginal effects plots
 p_ars_moon <- 
   effect_plot(mod, moon_frac, data = night_df, interval = T,
               plot.points = F, partial.residuals = F) +
@@ -71,14 +88,7 @@ p_ars_lat <-
 
 plot_grid(p_ars_moon, p_ars_wind, p_ars_lat, nrow = 1)
 
-pr <- as.numeric(predict.gam(mod, night_df, type="response"))            
-pred <- prediction(pr, night_df$ars)
-perf <- performance(pred, measure="tpr", x.measure="fpr")  
-plot(perf, colorize = TRUE, print.cutoffs.at = c(0.1,0.2,0.3,0.4,0.5))
-perf <- performance(pred, measure="auc")  
-
-concurvity(mod)
-
+# Create meta dataframe on a per night basis
 night_meta <- trip_df %>%
   filter(sun_angle < -6) %>%
   mutate(night_id = paste(id, as.Date(date_time), sep = "_")) %>%
@@ -97,6 +107,7 @@ night_meta <- trip_df %>%
             longitude = mean(Longitude),
             mixed = sum(act_class == "mixed") / n)
 
+# Model proportion of ARS per night ~ environment
 mod_meta <- gam(data = night_meta,
                 formula = prop_ars ~
                   s(moon_frac, bs = "ts") +
@@ -108,10 +119,13 @@ mod_meta <- gam(data = night_meta,
                 family = gaussian(),
                 na.action = "na.fail")
 
+# Select, summarise, diagnose
 MuMIn::dredge(mod_meta)
 summary(mod_meta)
 acf(residuals(mod_meta))
+testResiduals(simulateResiduals(mod_meta))
 
+# Marginal effects plots for this model
 prop_ars_moon <- 
   effect_plot(mod_meta, moon_frac, data = night_meta, interval = T,
             plot.points = F, partial.residuals = F) +
@@ -129,20 +143,13 @@ prop_ars_lat <-
   labs(y = "Proportion ARS per night", x = "Latitude") +
   scale_y_continuous(limits = c(0.06,0.45))
 
-effect_plot(mod_meta, id, interval = T)
-
 ars_effects <- 
   plot_grid(prop_ars_moon,
           prop_ars_wind + labs(y = ""),
           prop_ars_lat + labs(y = ""), 
           nrow = 1, rel_widths = c(1.1, 1, 1))
 
-testResiduals(simulateResiduals(mod_meta))
-
-ggplot(night_meta %>% filter(n_std > 30)) +
-  geom_smooth(aes(x = moon_frac, y = prop_ars)) +
-  geom_point(aes(x = moon_frac, y = prop_ars))
-
+# Model proportion of coarse ARS per ARS ~ environment
 mod_prop_meta <- gam(data = night_meta_b,
                 formula = prop_coarse_ars ~
                   s(moon_frac, bs = "ts", k = 3) +
@@ -154,8 +161,12 @@ mod_prop_meta <- gam(data = night_meta_b,
                 family = gaussian(),
                 na.action = "na.fail")
 
+# Summarise, select, diagnose
 summary(mod_prop_meta)
+MuMIn::dredge(mod_prop_meta)
+testResiduals(simulateResiduals(mod_prop_meta))
 
+# Plot out heavy lifting relationship as a non-interacting interaction
 prop_cars <-
   interact_plot(mod_prop_meta, moon_frac, modx = wind_sp, data = night_meta_b, interval = T,
               plot.points = T, partial.residuals = F, modx.values = c(4, 8, 12),
@@ -164,9 +175,7 @@ prop_cars <-
   labs(y = "Proportion extensive ARS per night", x = "Moon fraction") +
   scale_y_continuous(limits = c(0,1))
 
-MuMIn::dredge(mod_prop_meta)
-testResiduals(simulateResiduals(mod_prop_meta))
-
+# Shape data into set split by solar angle in 2 degree bins for plotting
 solar_meta <- trip_df %>%
   mutate(solar_split = (round(sun_angle/2))*2,
          embc_simple = ifelse(embc_simple == 5, NA, embc_simple)) %>%
@@ -189,6 +198,7 @@ solar_meta <- trip_df %>%
 
 head(solar_meta)
 
+# Plot EMBC state per solar angle
 embc_plot <- solar_meta %>%
   pivot_longer(cols = c(prop_ars, prop_trans, prop_rest), values_to = "value",
                names_to = "prop") %>%
@@ -203,6 +213,7 @@ embc_plot <- solar_meta %>%
   labs(x = "Solar angle", y = "Proportion of EMbC states",
        fill = "EMbC state")
 
+# Plot immserion state per solar angle
 gls_plot <- solar_meta %>%
   filter(!is.na(prop_mixed)) %>%
   pivot_longer(cols = c(prop_mixed, prop_wet, prop_dry), values_to = "value",
@@ -218,7 +229,8 @@ gls_plot <- solar_meta %>%
   labs(x = "Solar angle", y = "Proportion of immersion states",
        fill = "Immersion state")
 
-count_plotb <- trip_df %>%
+#Plot count of points per sex by solar angle
+count_plot <- trip_df %>%
   mutate(solar_split = (round(sun_angle/2))*2,
          sex = ifelse(sex == "m", "Male", "Female")) %>%
   ggplot() + geom_bar(aes(x = solar_split, fill = sex),
@@ -229,8 +241,6 @@ count_plotb <- trip_df %>%
   theme(legend.position = "bottom") +
   labs(x = "Solar angle", y = "Count of track points",
        fill = "")
-
-require(cowplot)
 
 solar_dist_plots <- 
   plot_grid(count_plot + labs(title = "A"),
