@@ -31,8 +31,6 @@ mod <- bam(data = night_df,
 
 summary(mod)
 acf(residuals(mod))
-
-
 MuMIn::dredge(mod)
 
 mod <- bam(data = night_df,
@@ -79,48 +77,7 @@ perf <- performance(pred, measure="tpr", x.measure="fpr")
 plot(perf, colorize = TRUE, print.cutoffs.at = c(0.1,0.2,0.3,0.4,0.5))
 perf <- performance(pred, measure="auc")  
 
-# Predict model over the same dataset
-pr <- as.numeric(predict(mod, night_df, type = "response"))            
-
-# Compare predicted values to actual values
-pred <- prediction(pr, night_df$ars)
-
-
-ROCR::performance(pred, measure="auc")@y.values
-
-# Print AUC
-ROCR::performance(pred, measure="f")@x.values[[1]][
-  which.max(ROCR::performance(pred, measure="f")@y.values[[1]])
-]
-
-# Create ROC
-perf <- ROCR::performance(pred, measure = "tpr", x.measure = "fpr")         
-
-# Plot out ROC
-plot(perf, colorize = TRUE, print.cutoffs.at = c(0.1,0.2,0.3,0.4,0.5))
-
-# Get coordinates for the ROC
-y <- unlist(perf@y.values)
-x <- unlist(perf@x.values)
-
-# Get the index of the furthest point from a diagonal to the ROCR
-ind <- which.max(sqrt(x^2+y^2) * sin(atan(y/x) - pi/4))
-
-# to identify the threshold that corresponds to the maximum prediction accuracy
-perf@alpha.values[[1]][ind]
-
-require(caret)
-# Confusion matrix based
-confusionMatrix(as.factor(ifelse(pr > 0.24, T, F)),
-                factor(night_df$ars, labels = c(F, T)),
-                mode = "everything",
-                positive="TRUE")
-
-# Get rid of some temporary data
-rm(pr, pred, perf, x, y, ind)
-
 concurvity(mod)
-
 
 night_meta <- trip_df %>%
   filter(sun_angle < -6) %>%
@@ -139,7 +96,6 @@ night_meta <- trip_df %>%
             latitude = mean(Latitude),
             longitude = mean(Longitude),
             mixed = sum(act_class == "mixed") / n)
-
 
 mod_meta <- gam(data = night_meta,
                 formula = prop_ars ~
@@ -175,26 +131,17 @@ prop_ars_lat <-
 
 effect_plot(mod_meta, id, interval = T)
 
-require(cowplot)
 ars_effects <- 
   plot_grid(prop_ars_moon,
           prop_ars_wind + labs(y = ""),
           prop_ars_lat + labs(y = ""), 
           nrow = 1, rel_widths = c(1.1, 1, 1))
 
-require(DHARMa)
 testResiduals(simulateResiduals(mod_meta))
-
 
 ggplot(night_meta %>% filter(n_std > 30)) +
   geom_smooth(aes(x = moon_frac, y = prop_ars)) +
   geom_point(aes(x = moon_frac, y = prop_ars))
-
-ggplot(trip_df %>% mutate(daynight = ifelse(sun_angle < -6, "night", "day"))) +
-  geom_bar(aes(x = daynight, fill = as.factor(embc_simple)))
-
-night_meta_b <- night_meta %>% filter(!is.na(prop_coarse_ars)) %>%
-  mutate(w = prop_ars / mean(prop_ars))
 
 mod_prop_meta <- gam(data = night_meta_b,
                 formula = prop_coarse_ars ~
@@ -242,18 +189,6 @@ solar_meta <- trip_df %>%
 
 head(solar_meta)
 
-ggplot(solar_meta) + geom_bar(aes(x = solar_split, weight = prop_ars)) +
-  scale_fill_viridis_d(option = "H")
-
-ggplot(solar_meta) + geom_bar(aes(x = solar_split, weight = prop_mixed)) +
-  scale_fill_viridis_d(option = "H")
-
-ggplot(solar_meta) + geom_bar(aes(x = solar_split, weight = land_per_hour)) +
-  scale_fill_viridis_d(option = "H")
-
-ggplot(solar_meta) + geom_bar(aes(x = solar_split, weight = landings)) +
-  scale_fill_viridis_d(option = "H")
-
 embc_plot <- solar_meta %>%
   pivot_longer(cols = c(prop_ars, prop_trans, prop_rest), values_to = "value",
                names_to = "prop") %>%
@@ -283,19 +218,6 @@ gls_plot <- solar_meta %>%
   labs(x = "Solar angle", y = "Proportion of immersion states",
        fill = "Immersion state")
 
-count_plot <- trip_df %>%
-  mutate(solar_split = (round(sun_angle/2))*2,
-         sex = ifelse(sex == "m", "Male", "Female")) %>%
-  ggplot() + geom_bar(aes(x = solar_split, fill = id),
-                      colour = "black", just = 0, width = 2) +
-  scale_fill_viridis_d(option = "H", begin = 1, end = 0) +theme_classic() +
-  scale_x_continuous(expand = F, limits = c(-42, 78)) +
-  scale_y_continuous(expand = F) +
-  theme(legend.position = "bottom") +
-  labs(x = "Solar angle", y = "Count of track points",
-       fill = "Bird identity") +
-  facet_wrap(facets = ~sex, nrow = 2)
-
 count_plotb <- trip_df %>%
   mutate(solar_split = (round(sun_angle/2))*2,
          sex = ifelse(sex == "m", "Male", "Female")) %>%
@@ -319,58 +241,3 @@ solar_dist_plots <-
 ggsave(solar_dist_plots, filename = "plots/solar_dist_plots.png",
        width = 6, height = 10, dpi = 500)
 
-
-
-solar_meta %>%
-  filter(!is.na(prop_mixed)) %>%
-  pivot_longer(cols = c(prop_hh, prop_lh), values_to = "value",
-               names_to = "prop") %>%
-  mutate(prop = factor(prop, levels = c("prop_hh", "prop_lh"),
-                       labels = c("Extensive ARS", "Intensive ARS"))) %>%
-  ggplot() + geom_bar(aes(x = solar_split, fill = prop, weight = value),
-                      colour = "black", just = 0, width = 2) +
-  scale_fill_viridis_d(option = "G", begin = 0.8, end = 0.2) +theme_classic() +
-  scale_x_continuous(expand = F, limits = c(-42, 78)) +
-  scale_y_continuous(expand = F) +
-  theme(legend.position = "bottom") +
-  labs(x = "Solar angle", y = "Proportion of ARS",
-       fill = "ARS scale")
-
-solar_meta %>%
-  ggplot() + geom_bar(aes(x = solar_split, fill = solar_split, weight = ars_step),
-                      colour = "black", just = 0, width = 2) +
-  scale_fill_viridis_d(option = "G", begin = 0.8, end = 0.2) +theme_classic() +
-  scale_x_continuous(expand = F, limits = c(-42, 78)) +
-  scale_y_continuous(expand = F) +
-  theme(legend.position = "bottom") +
-  labs(x = "Solar angle", y = "Proportion of ARS",
-       fill = "ARS scale")
-  
-
-trip_df %>% group_by(embc_simple) %>%
-  filter(embc_simple != 5) %>%
-  summarise(landings = mean((landings / (time / 3600)), na.rm = T)) %>%
-  ggplot() + geom_bar(aes(x = embc_simple, weight = landings))
-
-trip_df %>% group_by(embc) %>%
-  filter(embc != 9) %>%
-  summarise(landings = mean((landings / (time / 3600)), na.rm = T)) %>%
-  ggplot() + geom_bar(aes(x = embc, weight = landings))
-
-
-trip_df %>% group_by(embc_simple) %>%
-  filter(embc_simple != 5, !is.na(act_class)) %>%
-  ggplot() + geom_bar(aes(x = embc, fill = act_class))
-
-trip_df %>%
-  filter(embc != 9, !is.na(act_class)) %>%
-  ggplot() + geom_bar(aes(x = embc, fill = act_class))
-
-
-trip_df %>% 
-  mutate(solar_split = (round(sun_angle/2))*2,
-         embc_simple = ifelse(embc_simple == 5, NA, embc_simple)) %>%
-  filter(!is.na(embc_simple)) %>%
-  group_by(solar_split) %>%
-  ggplot() + geom_bar(aes(x = solar_split,# weight = landings,
-                          fill = as.factor(embc_simple)), position = position_stack(reverse = TRUE))
