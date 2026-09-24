@@ -1,4 +1,5 @@
 
+# Plot density of immersion proportions per EMBC state
 embc_immerse_plot <- 
   ggplot(trip_df %>%
            filter(embc_simple != 5) %>%
@@ -14,6 +15,7 @@ embc_immerse_plot <-
   labs(y = "Proportion of time wet", x = "EMbC state", title = "B") +
   theme_classic()
 
+# Plot distribution of track points per latitude (interpolated data)
 sex_lat_plot <- 
   ggplot(trip_df_int %>% mutate(Sex = factor(sex, labels = c("Female", "Male")),
                               weight = 1/6)) + 
@@ -25,13 +27,14 @@ sex_lat_plot <-
   scale_x_continuous(expand = F) +
   theme_classic()
 
+# Combine the two above to create figure 1
 fig_1 <- 
   plot_grid(sex_lat_plot + border, embc_immerse_plot + border, ncol = 1)
 
 ggsave(fig_1, filename = "plots/fig_1.png",
        width = 8, height = 8, dpi = 500)
 
-
+# Load in marmap to get some bathymetry
 require(marmap)
 bathy_rstr <- getNOAA.bathy(lon1 = 140, lat1 = -80,
                             lon2 = -90, lat2 = -25,
@@ -71,9 +74,11 @@ albie_track_plot <-
   scale_colour_viridis_c(option = "H", begin = 0, end = 1) +
   labs(x = "Longtiude", y = "Latitude", colour = "Solar angle")
 
+# Save this off as the track plot to become figure 2
 ggsave(albie_track_plot, filename = "plots/albie_track_plotb.png",
        dpi = 500, width = 12, height = 8)
 
+# Rework covariate maginal effects plots from the p(ARS) model
 p_ars_moon <- 
   effect_plot(mod, moon_frac, data = night_df, interval = T,
               plot.points = F, partial.residuals = F) +
@@ -91,12 +96,15 @@ p_ars_lat <-
   labs(y = "P(ARS)", x = "Latitude", title = "G") +
   scale_y_continuous(limits = c(0.09,0.47))
 
+# Create a border object to delineate figure 3
 border <- 
   theme(panel.background =
           element_rect(colour = "black",
                        fill=NA,
                        linewidth=1))
 
+# Combine descriptive distributions of track points and behaviours in relation to solar angle
+# with marginal effects plots of most important correlations to create figure 3
 fig_3 <- plot_grid(plot_grid(plot_grid(count_plotb + labs(title = "A") +
                                theme(legend.position = "bottom"),
                              gls_plot + labs(title = "B",
